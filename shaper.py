@@ -2,8 +2,14 @@
 Akshara shaper stage.
 
 Feeds each cluster (codepoint sequence from cluster_enum.py) through HarfBuzz
-and returns the glyph run for that cluster: a list of GlyphInfo in pixel units
-at the requested size.
+and returns the glyph run for that cluster.
+
+Two output modes:
+  - Design-unit mode (v3): positions in font design units (size-independent).
+    Use shape_all_du() — returns GlyphInfoDU instances.
+  - Pixel mode (legacy): positions already scaled to pixels at a given size.
+    Use shape_all() — returns GlyphInfo instances.  Still used by the v2 path
+    and the desktop renderer.
 
 Usage:
     python -m shaper --font NotoSansKannada-Regular.ttf --script kannada --size 24
@@ -22,7 +28,6 @@ import uharfbuzz as hb
 from cluster_enum import Cluster, ScriptConfig, enumerate_clusters, from_module
 
 # Maps AKS_SCRIPT_* id → (4-letter OpenType script tag, BCP-47 language tag).
-# HarfBuzz uses these for mandatory feature selection (akhn, half, pstf, …).
 _SCRIPT_HB: dict[int, tuple[str, str]] = {
     0x01: ("Knda", "kn"),
     0x02: ("Taml", "ta"),
@@ -36,49 +41,61 @@ _SCRIPT_HB: dict[int, tuple[str, str]] = {
 
 @dataclass(frozen=True)
 class GlyphInfo:
+    """Glyph position in pixel units (scaled to a specific size)."""
     glyph_id: int
     x_offset: int   # pixels, rounded
-    y_offset: int   # pixels, rounded (positive = up in HarfBuzz convention)
+    y_offset: int   # pixels, rounded (positive = up, HarfBuzz convention)
     x_advance: int  # pixels, rounded
 
 
-ShapedCluster = list[GlyphInfo]
+@dataclass(frozen=True)
+class GlyphInfoDU:
+    """Glyph position in font design units (size-independent)."""
+    glyph_id: int
+    x_offset: int   # design units (positive = right)
+    y_offset: int   # design units (positive = up, HarfBuzz convention)
+    x_advance: int  # design units
+
+
+ShapedCluster    = list[GlyphInfo]
+ShapedClusterDU  = list[GlyphInfoDU]
 
 
 class Shaper:
     """
-    HarfBuzz shaper for one font face at a fixed pixel size.
+    HarfBuzz shaper for one font face.
 
-    HarfBuzz operates in design units; we convert to pixels via size/upem.
-    The font scale is set to upem so that raw position values are in design
-    units and the conversion is a single multiply.
+    When size is provided, positions are scaled to pixels (legacy mode).
+    Call shape_du() to get design-unit positions (v3 mode).
+
+    HarfBuzz operates in design units; pixel conversion is: round(du * size / upem).
+    The font scale is set to upem so raw position values come back as design units.
     """
 
-    def __init__(self, font_path: str | Path, cfg: ScriptConfig, size: int) -> None:
+    def __init__(self, font_path: str | Path, cfg: ScriptConfig,
+                 size: int | None = None) -> None:
         script_tag, lang_tag = _SCRIPT_HB.get(cfg.script_id, ("Latn", "en"))
 
         blob = hb.Blob.from_file_path(str(font_path))
         face = hb.Face(blob)
         self._font = hb.Font(face)
         self._upem: int = face.upem
-        self._px_scale: float = size / self._upem
+        self._px_scale: float = (size / self._upem) if size is not None else 1.0
 
-        # Design-unit scale: positions come back in font design units.
+        # Scale = upem so positions come back in design units.
         self._font.scale = (self._upem, self._upem)
 
         self._script_tag = script_tag
         self._lang_tag = lang_tag
 
-    def shape(self, cluster: Cluster) -> ShapedCluster:
+    @property
+    def upem(self) -> int:
+        return self._upem
+
+    def _shape_raw(self, cluster: Cluster) -> list[tuple[int, int, int, int]]:
         """
-        Shape one cluster and return its glyph run in pixel units.
-
-        guess_segment_properties() is called so HarfBuzz auto-detects the
-        Unicode script from the codepoints; the language is then overridden
-        because OpenType feature selection depends on the BCP-47 language tag.
-
-        Returns an empty list if HarfBuzz produces no glyphs (e.g. all
-        codepoints are absent from the font's cmap).
+        Shape one cluster.  Returns list of (glyph_id, x_off_du, y_off_du, x_adv_du).
+        All positions are in design units.  Returns [] if HarfBuzz yields no glyphs.
         """
         buf = hb.Buffer()
         buf.add_codepoints(list(cluster))
@@ -87,16 +104,35 @@ class Shaper:
 
         hb.shape(self._font, buf)
 
-        s = self._px_scale
-        result: ShapedCluster = []
+        result: list[tuple[int, int, int, int]] = []
         for info, pos in zip(buf.glyph_infos, buf.glyph_positions):
-            result.append(GlyphInfo(
-                glyph_id=info.codepoint,   # after shaping, .codepoint holds glyph id
-                x_offset=round(pos.x_offset * s),
-                y_offset=round(pos.y_offset * s),
-                x_advance=round(pos.x_advance * s),
+            result.append((
+                info.codepoint,     # after shaping, .codepoint holds glyph_id
+                pos.x_offset,
+                pos.y_offset,
+                pos.x_advance,
             ))
         return result
+
+    def shape(self, cluster: Cluster) -> ShapedCluster:
+        """Shape one cluster; return glyph run in pixel units (legacy mode)."""
+        s = self._px_scale
+        return [
+            GlyphInfo(
+                glyph_id=gid,
+                x_offset=round(xo * s),
+                y_offset=round(yo * s),
+                x_advance=round(xa * s),
+            )
+            for gid, xo, yo, xa in self._shape_raw(cluster)
+        ]
+
+    def shape_du(self, cluster: Cluster) -> ShapedClusterDU:
+        """Shape one cluster; return glyph run in design units (v3 mode)."""
+        return [
+            GlyphInfoDU(glyph_id=gid, x_offset=xo, y_offset=yo, x_advance=xa)
+            for gid, xo, yo, xa in self._shape_raw(cluster)
+        ]
 
 
 def shape_all(
@@ -106,11 +142,8 @@ def shape_all(
     clusters: list[Cluster] | None = None,
 ) -> list[tuple[Cluster, ShapedCluster]]:
     """
-    Shape every cluster for a script. Returns (cluster, glyph_run) pairs.
-
-    If clusters is None, calls cluster_enum.enumerate_clusters to generate them.
-    Clusters for which HarfBuzz produces no output are silently dropped; the
-    packer will mark them absent so the MCU takes the OOV fallback path.
+    Shape every cluster for a script; positions in pixels.
+    Clusters that produce no HarfBuzz output are silently dropped.
     """
     if clusters is None:
         clusters = enumerate_clusters(cfg)
@@ -122,6 +155,28 @@ def shape_all(
         if shaped:
             results.append((cluster, shaped))
     return results
+
+
+def shape_all_du(
+    font_path: str | Path,
+    cfg: ScriptConfig,
+    clusters: list[Cluster] | None = None,
+) -> tuple[list[tuple[Cluster, ShapedClusterDU]], int]:
+    """
+    Shape every cluster; positions in design units (size-independent).
+    Returns (shaped_pairs, upem).
+    Clusters that produce no output are silently dropped.
+    """
+    if clusters is None:
+        clusters = enumerate_clusters(cfg)
+
+    shaper = Shaper(font_path, cfg)
+    results: list[tuple[Cluster, ShapedClusterDU]] = []
+    for cluster in clusters:
+        shaped = shaper.shape_du(cluster)
+        if shaped:
+            results.append((cluster, shaped))
+    return results, shaper.upem
 
 
 def main() -> None:
