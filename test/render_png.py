@@ -577,7 +577,7 @@ TEST_STRINGS: list[tuple[str, str]] = [
 
 import pytest  # noqa: E402
 
-_AKS_PATH = Path("/tmp/noto_kannada_regular_22.aks")
+_AKS_PATH = Path("/tmp/noto_kannada_regular.aks")
 
 
 @pytest.fixture(scope="module")
