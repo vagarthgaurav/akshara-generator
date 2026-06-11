@@ -22,6 +22,19 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+# ── Glyph bitmap expansion tables ────────────────────────────────────────────
+# Precomputed per-byte expansion: each entry maps one packed byte → pixel values.
+# 1bpp: bit 1 → 0 (black), bit 0 → 255 (white); 8 pixels per byte.
+# 2bpp: 4 levels × 85 → 0/85/170/255 scaled to 0–255 ink; 4 pixels per byte.
+_EXPAND_1BPP: list[bytes] = [
+    bytes(0 if ((b >> (7 - bit)) & 1) else 255 for bit in range(8))
+    for b in range(256)
+]
+_EXPAND_2BPP: list[bytes] = [
+    bytes(255 - ((b >> (6 - 2 * bit)) & 0x03) * 85 for bit in range(4))
+    for b in range(256)
+]
+
 # ── Struct formats (must match packer.py exactly) ────────────────────────────
 
 # Header v3: magic(4) version(1) script_id(1) size_count(1) _reserved(1)
@@ -127,11 +140,12 @@ class AksReader:
     """
 
     def __init__(self, path: str | Path,
-                 size_px: int | None = None, weight: int = 0) -> None:
+                 size_px: int | None = None, weight: int = 0,
+                 bpp: int | None = None) -> None:
         self._data = Path(path).read_bytes()
         self._hdr, self._rules = self._parse_header()
         self._keys: list[KeyEntry] = self._load_key_table()
-        self._size: SizeEntry = self._select_size(size_px, weight)
+        self._size: SizeEntry = self._select_size(size_px, weight, bpp)
 
     def _parse_header(self) -> tuple[AksHeader, RuleTable]:
         d = self._data
@@ -174,13 +188,15 @@ class AksReader:
                          baseline=bl, upem=upem, glyph_count=gcount,
                          metrics_offset=mo, offsets_offset=oo, bitmaps_offset=bo)
 
-    def _select_size(self, size_px: int | None, weight: int) -> SizeEntry:
+    def _select_size(self, size_px: int | None, weight: int,
+                     bpp: int | None = None) -> SizeEntry:
         if size_px is None:
             return self._load_size_entry_at(0)
         for i in range(self._hdr.size_count):
             e = self._load_size_entry_at(i)
             if e.size_px == size_px and e.weight == weight:
-                return e
+                if bpp is None or e.bpp == bpp:
+                    return e
         return self._load_size_entry_at(0)
 
     def _load_key_table(self) -> list[KeyEntry]:
@@ -267,6 +283,30 @@ class AksReader:
                     row_pixels.append(255 - level * 85)
             pixels.append(row_pixels)
         return pixels
+
+    def glyph_image(self, glyph_idx: int, gm: GlyphMetrics) -> Image.Image | None:
+        """Decode a glyph bitmap directly to a PIL greyscale Image.
+
+        Uses precomputed byte-expansion tables instead of per-pixel putpixel calls.
+        Returns None for non-printing glyphs.
+        """
+        bmp = self.read_glyph_bitmap(glyph_idx, gm)
+        if bmp is None:
+            return None
+        bpp      = self._size.bpp
+        stride   = math.ceil(gm.width / (8 / bpp))
+        expand   = _EXPAND_1BPP if bpp == 1 else _EXPAND_2BPP
+        per_byte = 8 if bpp == 1 else 4
+        raw      = bytearray(gm.width * gm.height)
+        for row in range(gm.height):
+            row_buf = bmp[row * stride : (row + 1) * stride]
+            dst = row * gm.width
+            col = 0
+            for byte_val in row_buf:
+                take = min(per_byte, gm.width - col)
+                raw[dst + col : dst + col + take] = expand[byte_val][:take]
+                col += take
+        return Image.frombytes("L", (gm.width, gm.height), bytes(raw))
 
     @property
     def header(self) -> AksHeader:
@@ -438,17 +478,18 @@ def render_string(
     img = Image.new("L", (img_w, img_h), 255)
 
     for blit_x, blit_y, glyph_idx, gm in glyph_draws:
-        px_grid = reader.glyph_pixels(glyph_idx, gm)
-        if px_grid is None:
+        glyph_img = reader.glyph_image(glyph_idx, gm)
+        if glyph_img is None:
             continue
-        glyph_img = Image.new("L", (gm.width, gm.height), 255)
-        for row_idx, row in enumerate(px_grid):
-            for col_idx, val in enumerate(row):
-                glyph_img.putpixel((col_idx, row_idx), val)
         paste_x = max(0, blit_x)
         paste_y = max(0, blit_y)
         if paste_x < img_w and paste_y < img_h:
-            img.paste(glyph_img, (paste_x, paste_y))
+            # Use inverted glyph as mask: ink pixels (0) → mask 255 (opaque),
+            # background pixels (255) → mask 0 (transparent). This prevents
+            # a glyph's white background from erasing ink already on the canvas
+            # when glyphs within a cluster have overlapping bounding boxes.
+            mask = glyph_img.point(lambda p: 255 - p)
+            img.paste(glyph_img, (paste_x, paste_y), mask)
 
     return img, pen_x, oov_count
 
