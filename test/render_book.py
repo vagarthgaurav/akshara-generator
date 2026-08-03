@@ -242,7 +242,7 @@ def _render_page_worker(task: _PageTask) -> tuple[int, int, int, int]:
         font = ImageFont.load_default()
     draw.text(
         (task.page_w * task.scale // 2 - 20, (task.page_h - _MARGIN // 2) * task.scale),
-        f"— {task.page_num + 1} —",
+        f"- {task.page_num + 1} -",
         fill=160,
         font=font,
     )
@@ -276,7 +276,7 @@ def render_pages(
     stats = dict(total_lines=0, total_words=0, total_oov=0,
                  total_clusters=0, pages_written=0)
 
-    # Pre-wrap all paragraphs into lines (sequential — in-memory lookups, fast).
+    # Pre-wrap all paragraphs into lines (sequential, in-memory lookups, fast).
     all_lines: list[tuple[list, bool]] = []
     for para in paragraphs:
         para = para.strip()
@@ -390,7 +390,7 @@ def main() -> None:
     if buf:
         paragraphs.append(" ".join(buf))
 
-    print(f"Text: {text_path.name} — {len(all_lines):,} lines → {len(paragraphs):,} paragraphs")
+    print(f"Text: {text_path.name}: {len(all_lines):,} lines → {len(paragraphs):,} paragraphs")
     print(f"Rendering up to {args.pages} page(s) at {args.page_width}×{args.page_height}px "
           f"(scale {args.scale}×, {os.cpu_count()} CPU(s)) …")
 
@@ -405,7 +405,7 @@ def main() -> None:
         scale     = args.scale,
     )
 
-    print(f"\nDone — {stats['pages_written']} page(s) → {args.out_dir}/")
+    print(f"\nDone: {stats['pages_written']} page(s) → {args.out_dir}/")
     print(f"  Lines rendered : {stats['total_lines']:,}")
     print(f"  Words rendered : {stats['total_words']:,}")
     print(f"  Clusters blitted: {stats['total_clusters']:,}")

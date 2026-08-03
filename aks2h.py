@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-aks2h.py — convert a .aks binary to a C header suitable for baking into firmware.
+aks2h.py: convert a .aks binary to a C header suitable for baking into firmware.
 
 Usage:
     python aks2h.py <input.aks> <array_name> [> output.h]
@@ -25,7 +25,7 @@ def aks2h(aks_path: Path, array_name: str) -> str:
 
     return (
         f"#pragma once\n"
-        f"/* Generated from {aks_path.name} ({size} bytes) — do not edit. */\n"
+        f"/* Generated from {aks_path.name} ({size} bytes); do not edit. */\n"
         f"#include <stdint.h>\n"
         f"\n"
         f"static const uint8_t {array_name}[{size}] = {{\n"

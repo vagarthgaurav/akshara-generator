@@ -8,7 +8,7 @@ Run directly to generate a visual PNG grid:
     cd aks-generator && uv run python test/test_rasterizer.py [output.png] [--size N] [--bpp 1|2]
 
     --size 24          e-paper (default)
-    --size 48 --bpp 2  LCD / AMOLED — smooth anti-aliased rendering
+    --size 48 --bpp 2  LCD / AMOLED, smooth anti-aliased rendering
     --bpp 2            4-grey e-paper mode
 """
 
@@ -114,7 +114,7 @@ class TestBitmapDimensions:
         single = _rast(rasterizer, shaper, (0x0C95,))        # ಕ
         conjunct = _rast(rasterizer, shaper, (0x0C95, 0x0CCD, 0x0CA4))  # ಕ್ತ
         # A shaped conjunct typically renders as one ligature glyph, so width
-        # may not be additive — but advance should be ≥ single consonant.
+        # may not be additive, but advance should be ≥ single consonant.
         assert conjunct.advance >= single.advance
 
     def test_vowel_sign_changes_bitmap(self, rasterizer, shaper):

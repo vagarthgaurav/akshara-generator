@@ -223,13 +223,13 @@ def pack(
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    # ── 1. Shape all clusters once (size-independent, design units) ───────────
+    # Shape all clusters once (size-independent, design units).
     shaped_pairs, upem = shape_all_du(font_regular, cfg)
 
     # Sort by codepoint sequence for binary search.
     sorted_pairs = sorted(shaped_pairs, key=lambda pair: _cluster_sort_key(pair[0]))
 
-    # ── 2. Build glyph deduplication index ───────────────────────────────────
+    # Build the glyph deduplication index.
     glyph_index = build_glyph_index(sorted_pairs)  # glyph_id → glyph_idx
     glyph_ids_ordered = sorted(glyph_index, key=lambda gid: glyph_index[gid])
     glyph_count = len(glyph_ids_ordered)
@@ -248,10 +248,10 @@ def pack(
                 f"  Regular-only glyph IDs: {sorted(missing)[:10]}"
             )
 
-    # ── 3. Build composition table ────────────────────────────────────────────
+    # Build the composition table.
     comp_blocks, comp_offsets = build_composition_table(sorted_pairs, glyph_index)
 
-    # ── 4. Build key table ────────────────────────────────────────────────────
+    # Build the key table.
     cluster_count = len(sorted_pairs)
     key_entries: list[bytes] = []
     for i, (cluster, _) in enumerate(sorted_pairs):
@@ -260,7 +260,7 @@ def pack(
                                        cp[0], cp[1], cp[2], cp[3], cp[4], cp[5],
                                        comp_offsets[i]))
 
-    # ── 5. Build rule table ───────────────────────────────────────────────────
+    # Build the rule table.
     rule_table = struct.pack(
         _RULE_FMT,
         cfg.consonant_range[0], cfg.consonant_range[1],
@@ -270,7 +270,7 @@ def pack(
         cfg.max_conjunct_depth,
     )
 
-    # ── 6. Build per-size sections ────────────────────────────────────────────
+    # Build the per-size sections.
     variants: list[tuple[int, int]] = []  # (size_px, weight)
     for sz in sizes:
         variants.append((sz, 0))  # Regular
@@ -286,7 +286,7 @@ def pack(
         )
         size_sections.append((metrics, offsets_blob, bitmaps, box))
 
-    # ── 7. Compute section offsets ────────────────────────────────────────────
+    # Compute section offsets.
     rule_offset   = _HDR_SIZE
     lookup_offset = rule_offset + _RULE_SIZE
     comp_offset   = lookup_offset + cluster_count * _KEY_SIZE
@@ -321,7 +321,7 @@ def pack(
             bitmaps_offset,
         ))
 
-    # ── 8. Pack header ────────────────────────────────────────────────────────
+    # Pack the header.
     header = struct.pack(
         _HDR_FMT,
         _AKS_MAGIC,
@@ -336,7 +336,7 @@ def pack(
         sizes_offset,
     )
 
-    # ── 9. Write file ─────────────────────────────────────────────────────────
+    # Write the file.
     with output.open("wb") as f:
         f.write(header)
         f.write(rule_table)

@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw, ImageFont
 # ── Glyph bitmap expansion tables ────────────────────────────────────────────
 # Precomputed per-byte expansion: each entry maps one packed byte → pixel values.
 # 1bpp: bit 1 → 0 (black), bit 0 → 255 (white); 8 pixels per byte.
-# 2bpp: 4 levels × 85 → 0/85/170/255 scaled to 0–255 ink; 4 pixels per byte.
+# 2bpp: 4 levels × 85 → 0/85/170/255 scaled to 0-255 ink; 4 pixels per byte.
 _EXPAND_1BPP: list[bytes] = [
     bytes(0 if ((b >> (7 - bit)) & 1) else 255 for bit in range(8))
     for b in range(256)
@@ -414,7 +414,7 @@ def render_string(
         """Scale design units to pixels (mirrors MCU du_to_px)."""
         return round(val * sz.size_px / sz.upem) if sz.upem else 0
 
-    # (blit_x, blit_y, glyph_idx, gm) — collected in one pass, drawn after
+    # (blit_x, blit_y, glyph_idx, gm), collected in one pass, drawn after
     glyph_draws: list[tuple[int, int, int, GlyphMetrics]] = []
     oov_count = 0
     pen_x = 0
@@ -676,7 +676,7 @@ class TestLookup:
         assert entry.comp_off < 1024 * 1024  # sanity bound
 
     def test_oov_returns_none(self, reader: AksReader) -> None:
-        entry = reader.lookup((0x0041,))  # Latin A — not in .aks
+        entry = reader.lookup((0x0041,))  # Latin A, not in .aks
         assert entry is None
 
     def test_glyph_has_positive_dimensions(self, reader: AksReader) -> None:

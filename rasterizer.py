@@ -5,7 +5,7 @@ Two modes:
   - Per-glyph mode (v3): rasterize each unique glyph_id individually.
     Use rasterize_glyph() or rasterize_glyph_set().
   - Cluster composite mode (legacy): composite all glyphs of a cluster into
-    one bitmap.  Use rasterize_all() — still used by the desktop renderer.
+    one bitmap.  Use rasterize_all(), still used by the desktop renderer.
 
 For 1bpp: FT_LOAD_TARGET_MONO gives hinted monochrome bitmaps directly.
 For 2bpp: anti-aliased grey rendering, quantized to 4 levels.
@@ -73,7 +73,7 @@ class Rasterizer:
         self, glyph_id: int,
     ) -> tuple[list[list[int]], int, int]:
         """
-        Render one glyph to an 8-bit 2D list (rows × cols, values 0–255).
+        Render one glyph to an 8-bit 2D list (rows × cols, values 0-255).
         Returns (pixels, bitmap_left, bitmap_top).
         Returns empty pixels list if the glyph has no ink (e.g. space).
         """

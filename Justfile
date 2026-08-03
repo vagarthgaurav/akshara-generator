@@ -1,4 +1,4 @@
-# akshara-generator recipes — the host-side (Python) .aks build pipeline
+# akshara-generator recipes: the host-side (Python) .aks build pipeline
 # Run from this repo's root: just <recipe>
 # Requires: just, uv
 
@@ -7,7 +7,7 @@ akshara_repo := "../Akshara"
 arduino_repo := "../Akshara-arduino"
 fonts_dir    := akshara_repo / "fonts"
 
-# script is required — always pass it before the recipe name:
+# script is required, always pass it before the recipe name:
 #   just script=tamil pack
 # font defaults to fonts/original/NotoSans<Script>-Regular.ttf; override if needed.
 script      := ""
@@ -35,7 +35,7 @@ default:
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
-# Generate clusters, shape, rasterize, and pack .aks files — one per size.
+# Generate clusters, shape, rasterize, and pack .aks files, one per size.
 # Output goes to <akshara_repo>/fonts/generated/<script>/noto_<script>_regular_<N>px.aks
 # Usage: just script=tamil pack
 #        just script=kannada font_bold=../Akshara/fonts/original/NotoSansKannada-Bold.ttf pack
@@ -68,7 +68,7 @@ render out="out.png":
         {{aks}} {{out}} \
         --words test/test-words/{{script}}.txt
 
-# Pack then immediately render — useful for a quick visual check after rule changes
+# Pack then immediately render, useful for a quick visual check after rule changes
 # Usage: just script=tamil build-and-render
 build-and-render out="out.png": pack
     just script={{script}} render out="{{out}}"

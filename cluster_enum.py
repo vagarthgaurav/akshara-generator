@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from types import ModuleType
 
 # Maximum codepoints per cluster key entry (aks_key_entry_t.cp array length).
-# Format v2: cp[6] — supports depth-2 conjuncts + vowel sign (max 6 codepoints).
+# Format v2: cp[6] supports depth-2 conjuncts + vowel sign (max 6 codepoints).
 # Devanagari depth-3 + vowel sign (8 codepoints) will require cp[8] (format v3).
 _KEY_MAX_CP = 6
 
@@ -55,7 +55,7 @@ class ScriptConfig:
     modifier_range: tuple[int, int]    # (start, end) for aks_rule_table_t
     max_conjunct_depth: int
     digits: tuple[int, ...] = ()
-    # atomic single-codepoint standalone consonant finals (e.g. Malayalam chillus U+0D7A–U+0D7F).
+    # atomic single-codepoint standalone consonant finals (e.g. Malayalam chillus U+0D7A-U+0D7F).
     # these fall outside the consonant range so the segmenter treats them as single-codepoint
     # clusters naturally; listing them here ensures they are precomputed in the .aks key table.
     chillus: tuple[int, ...] = ()
@@ -65,7 +65,7 @@ class ScriptConfig:
     # modifiers (see from_module).
     conjunct_pairs: tuple[tuple[int, int, tuple[int, ...], tuple[int, ...]], ...] = ()
     # depth-2 conjunct triples: (c1, c2, c3, vowel_signs, modifiers)
-    # cluster = c1 + virama + c2 + virama + c3 [+ vs] — 5 or 6 codepoints.
+    # cluster = c1 + virama + c2 + virama + c3 [+ vs]: 5 or 6 codepoints.
     # Gated on max_conjunct_depth >= 2. Vowel sign + modifier together would
     # be 7 codepoints and exceed _KEY_MAX_CP; at most one is stored per triple.
     conjunct_triples: tuple[tuple[int, int, int, tuple[int, ...], tuple[int, ...]], ...] = ()
@@ -192,7 +192,7 @@ def enumerate_clusters(cfg: ScriptConfig) -> list[Cluster]:
     for v in cfg.independent_vowels:
         add((v,))
 
-    # 2. Standalone virama and modifiers — needed for OOV fallback.
+    # 2. Standalone virama and modifiers, needed for OOV fallback.
     #    Conjunct fallback: consonant + virama glyph + consonant.
     #    C+VS+modifier fallback: (C+VS) glyph + standalone modifier glyph.
     add((cfg.virama,))
@@ -241,11 +241,11 @@ def enumerate_clusters(cfg: ScriptConfig) -> list[Cluster]:
             add(base + (m,))
 
     # 6. Digits, chillus, and common ASCII punctuation.
-    for cp in range(0x0030, 0x003A):   # ASCII 0–9
+    for cp in range(0x0030, 0x003A):   # ASCII 0-9
         add((cp,))
-    for cp in cfg.digits:              # script-native digits (e.g. Kannada ೦–೯)
+    for cp in cfg.digits:              # script-native digits (e.g. Kannada ೦-೯)
         add((cp,))
-    for cp in cfg.chillus:             # atomic standalone consonant finals (e.g. Malayalam ൺ–ൿ)
+    for cp in cfg.chillus:             # atomic standalone consonant finals (e.g. Malayalam ൺ-ൿ)
         add((cp,))
     for cp in _ASCII_PUNCTUATION:
         add((cp,))

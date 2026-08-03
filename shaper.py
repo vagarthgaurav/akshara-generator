@@ -6,9 +6,9 @@ and returns the glyph run for that cluster.
 
 Two output modes:
   - Design-unit mode (v3): positions in font design units (size-independent).
-    Use shape_all_du() — returns GlyphInfoDU instances.
+    Use shape_all_du(), which returns GlyphInfoDU instances.
   - Pixel mode (legacy): positions already scaled to pixels at a given size.
-    Use shape_all() — returns GlyphInfo instances.  Still used by the v2 path
+    Use shape_all(), which returns GlyphInfo instances. Still used by the v2 path
     and the desktop renderer.
 
 Usage:
